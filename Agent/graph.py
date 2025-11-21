@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from typing import TypedDict, List, Dict, Any
+from typing import TypedDict, List, Dict, Any, Optional
 
 from langgraph.graph import StateGraph, START, END
 # لا نستخدم MemorySaver عشان ما نحتاج thread_id
@@ -11,7 +11,8 @@ from langgraph.graph import StateGraph, START, END
 from Core.constants import TRUSTED_KSA
 from Agent.tools import shopping_search, product_page_fetch
 from Agent.normalizers import spec_normalizer, price_normalizer
-from Agent.ranking import is_pro_max_query, need_256, llm_rank_offers
+from Agent.ranking import llm_rank_offers
+from Agent.intent import analyze_intent
 
 
 class AgentState(TypedDict, total=False):
@@ -24,6 +25,11 @@ class AgentState(TypedDict, total=False):
     errors: List[str]
     next_tool: Dict[str, Any]
     trusted_only: bool
+    intent: Dict[str, Any]
+    needs_more_info: bool
+    follow_up_question: Optional[str]
+    search_query: str
+    clarification_count: int
 
 
 # -----------------------------
@@ -36,21 +42,31 @@ def planner(state: AgentState) -> AgentState:
     tried = set(state.get("tried_tools", []))
     offers = state.get("offers", [])
 
-    want_max = is_pro_max_query(q)
-    want_256gb = need_256(q)
-    target_model = "iPhone 15 Pro Max" if want_max else "iPhone 15 Pro"
+    intent = state.get("intent")
+    if not intent:
+        intent = analyze_intent(q)
+        state["intent"] = intent
+        state["search_query"] = intent.get("search_query", q)
+        if not intent.get("ready", False):
+            clarifications = state.get("clarification_count", 0)
+            if clarifications >= 1:
+                # already asked once; proceed with best effort
+                intent["ready"] = True
+                intent["follow_up_question"] = None
+                state["needs_more_info"] = False
+                state["follow_up_question"] = None
+            else:
+                state["needs_more_info"] = True
+                state["follow_up_question"] = intent.get("follow_up_question")
+                state["clarification_count"] = clarifications + 1
+                state["done"] = True
+                return state
+        # ready now -> ensure flags cleared
+        state["needs_more_info"] = False
+        state["follow_up_question"] = None
 
-    def is_exact(o: Dict[str, Any]) -> bool:
-        if o.get("model") != target_model:
-            return False
-        if want_256gb and o.get("storage") != "256GB":
-            return False
-        return True
-
-    exact_count = sum(1 for o in offers if is_exact(o))
-
-    # Stop if we have enough exact matches or exceeded max steps
-    if exact_count >= 4 or steps >= 6:
+    # Enforce max of 5 tool steps (roughly 5 agent messages)
+    if steps >= 5:
         state["done"] = True
         return state
 
@@ -61,26 +77,23 @@ def planner(state: AgentState) -> AgentState:
         return state
 
     # First tool: shopping_search
+    search_query = state.get("search_query", q)
+
     if "shopping_search" not in tried:
-        state["next_tool"] = {"name": "shopping_search", "args": {"query": q, "limit": 40}}
+        state["next_tool"] = {
+            "name": "shopping_search",
+            "args": {"query": search_query, "limit": 40},
+        }
         return state
 
-    # Otherwise, work on incomplete offers (model / storage)
-    incomplete: List[Dict[str, Any]] = []
-    for o in offers:
-        if o.get("model") != target_model:
-            incomplete.append(o)
-            continue
-        if want_256gb and o.get("storage") != "256GB":
-            incomplete.append(o)
-            continue
-
-    if incomplete and "spec_normalizer_batch" not in tried:
+    # Run spec_normalizer for richer metadata
+    if offers and "spec_normalizer_batch" not in tried:
         state["next_tool"] = {"name": "spec_normalizer_batch", "args": {}}
         return state
 
-    if incomplete and "product_page_fetch_batch" not in tried:
-        urls = [o.get("link") for o in incomplete[:3] if o.get("link")]
+    # Optionally enrich by fetching product pages if we still lack details
+    if offers and "product_page_fetch_batch" not in tried:
+        urls = [o.get("link") for o in offers[:3] if o.get("link")]
         if urls:
             state["next_tool"] = {"name": "product_page_fetch_batch", "args": {"urls": urls}}
             return state
@@ -90,8 +103,11 @@ def planner(state: AgentState) -> AgentState:
         state["next_tool"] = {"name": "price_normalizer_batch", "args": {}}
         return state
 
-    # Nothing else to do → finish
-    state["done"] = True
+    # Nothing else to do → finish or enforce max messages (5 steps)
+    if steps >= 5:
+        state["done"] = True
+    else:
+        state["done"] = True
     return state
 
 
@@ -178,24 +194,49 @@ def finisher(state: AgentState) -> Dict[str, Any]:
     offers = state.get("offers", [])
     trusted_only = bool(state.get("trusted_only"))
 
-    want_max = is_pro_max_query(q)
-    want_256gb = need_256(q)
-    target_model = "iPhone 15 Pro Max" if want_max else "iPhone 15 Pro"
+    if state.get("needs_more_info"):
+        question = state.get("follow_up_question")
+        state["result"] = {
+            "items": [],
+            "notes": question or "أحتاج مزيداً من التفاصيل لمساعدتك.",
+        }
+        return state
+
+    intent = state.get("intent", {})
+    category = (intent.get("category") or "").lower()
+    min_budget = intent.get("budget_min")
+    max_budget = intent.get("budget_max")
+    must_have = intent.get("must_have", [])
+    nice_to_have = intent.get("nice_to_have", [])
 
     def pass_basic(o: Dict[str, Any]) -> bool:
-        """Basic filter: model, storage (if needed), link, and reasonable price."""
-        model = o.get("model", "")
-        if model != target_model:
+        """Basic validation before LLM ranking."""
+        name = (o.get("name") or "").lower()
+        price_val = o.get("price_sar", o.get("price"))
+        link = o.get("link")
+
+        if not link or price_val is None:
             return False
-        if want_256gb and o.get("storage") != "256GB":
-            return False
-        if not o.get("link"):
-            return False
-        p = o.get("price_sar", o.get("price"))
         try:
-            return float(p) > 100
+            price = float(price_val)
         except Exception:
             return False
+
+        if isinstance(min_budget, (int, float)) and price < float(min_budget):
+            return False
+        if isinstance(max_budget, (int, float)) and price > float(max_budget):
+            return False
+
+        if category and category not in name:
+            return False
+
+        # Ensure must-have keywords appear somewhere
+        for token in must_have:
+            token_lower = token.lower()
+            if token_lower and token_lower not in name:
+                return False
+
+        return True
 
     candidates = [o for o in offers if pass_basic(o)]
 
@@ -214,9 +255,12 @@ def finisher(state: AgentState) -> Dict[str, Any]:
         return state
 
     # Base set for ranking
-    base = trusted_candidates if (trusted_only or trusted_candidates) else candidates
+    base = trusted_candidates if (trusted_only and trusted_candidates) else candidates or offers
 
-    # If still no candidates at all, return empty result but with valid shape
+    # If still no candidates at all, but offers exist, fall back to raw offers
+    if not base and offers:
+        base = offers[:5]
+
     if not base:
         state["result"] = {
             "items": [],
@@ -244,8 +288,8 @@ def finisher(state: AgentState) -> Dict[str, Any]:
         )
     )
 
-    # LLM re-ranking (keeps links)
-    ranked = llm_rank_offers(base[:20], q, top_k=4)
+    # LLM re-ranking (keeps links & images)
+    ranked = llm_rank_offers(base[:20], q, intent=intent, trusted_only=trusted_only, top_k=4)
 
     try:
         print("\nTop Picks (trusted first, New→Used, lowest price):")
@@ -259,6 +303,7 @@ def finisher(state: AgentState) -> Dict[str, Any]:
         "items": ranked.get("items", []),
         "notes": ranked.get("notes"),
     }
+    state["needs_more_info"] = False
 
     return state
 

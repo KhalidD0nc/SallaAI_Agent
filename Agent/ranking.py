@@ -8,55 +8,48 @@ from Core.config import client
 from Core.constants import TRUSTED_KSA
 
 
-def is_pro_max_query(q: str) -> bool:
-    """Return True if the query suggests 'Pro Max' model."""
-    q = q.lower()
-    return any(k in q for k in ["pro max", "promax", "ماكس", "max"])
-
-
-def need_256(q: str) -> bool:
-    """Return True if the query explicitly mentions 256GB."""
-    q = q.lower()
-    return ("256" in q) or ("٢٥٦" in q)
-
-
 def llm_rank_offers(
     offers: List[Dict[str, Any]],
     query: str,
+    intent: Dict[str, Any],
+    trusted_only: bool = False,
     top_k: int = 4,
 ) -> Dict[str, Any]:
     """Final LLM re-ranking with policy-aware selection and JSON output."""
+    if not offers:
+        return {"items": [], "notes": "No offers available for ranking."}
+
     slim = [
         {
             "name": o.get("name"),
             "price": o.get("price_sar", o.get("price")),
-            "currency": "SAR",
+            "currency": o.get("currency", "SAR"),
             "retailer": o.get("retailer"),
             "link": o.get("link"),
             "condition": o.get("condition"),
+            "image": o.get("image"),
+            "model": o.get("model"),
+            "storage": o.get("storage"),
+            "is_trusted": o.get("retailer") in TRUSTED_KSA,
         }
         for o in offers
         if o.get("link")
     ]
 
     policy = {
-        "primary_match": {
-            "must_match_model": "iPhone 15 Pro Max" if is_pro_max_query(query) else "iPhone 15 Pro",
-            "must_match_storage": "256GB" if need_256(query) else "any",
-        },
-        "prefer": {
-            "condition_order": ["New", "Refurbished", "Used", "Unknown"],
-            "retailer_trust_bonus_names": sorted(list(TRUSTED_KSA)),
-            "currency": "SAR",
-        },
-        "avoid": ["ambiguous bundles", "non-KSA results if local exists"],
-        "tie_breakers": ["lower price", "return window", "seller reputation"],
+        "need_summary": intent.get("need_summary"),
+        "category": intent.get("category"),
+        "budget_min": intent.get("budget_min"),
+        "budget_max": intent.get("budget_max"),
+        "must_have": intent.get("must_have", []),
+        "nice_to_have": intent.get("nice_to_have", []),
+        "trusted_only": trusted_only,
     }
 
     system = (
-        "You are a KSA e-commerce expert. Given JSON results, pick best matching offers "
-        "(exact model/storage), prefer trusted local retailers, prefer New, then lowest price. "
-        "Return strict JSON only."
+        "You are a Saudi Arabia shopping concierge. Select products that satisfy the user need, "
+        "respect budgets, and provide short reasoning. Prefer trusted retailers when requested. "
+        "If images are provided, pass them through. Return strict JSON according to the schema."
     )
     schema = {
         "type": "object",
@@ -72,11 +65,12 @@ def llm_rank_offers(
                         "currency": {"type": "string"},
                         "retailer": {"type": "string"},
                         "link": {"type": "string"},
+                        "image": {"type": ["string", "null"]},
                         "reason": {"type": "string"},
                     },
                 },
             },
-            "notes": {"type": "string"},
+            "notes": {"type": ["string", "null"]},
         },
         "required": ["items"],
     }
@@ -90,10 +84,14 @@ def llm_rank_offers(
             {
                 "role": "user",
                 "content": (
-                    "Query:\n" + query +
-                    "\n\nPolicy:\n" + json.dumps(policy, ensure_ascii=False) +
-                    "\n\nResults:\n" + json.dumps(slim, ensure_ascii=False) +
-                    "\n\nReturn schema:\n" + json.dumps(schema, ensure_ascii=False)
+                    "User query:\n"
+                    f"{query}\n\n"
+                    "Shopping intent:\n"
+                    f"{json.dumps(policy, ensure_ascii=False)}\n\n"
+                    "Candidate offers:\n"
+                    f"{json.dumps(slim, ensure_ascii=False)}\n\n"
+                    "Return schema:\n"
+                    f"{json.dumps(schema, ensure_ascii=False)}"
                 ),
             },
         ],

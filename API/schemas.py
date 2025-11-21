@@ -21,6 +21,7 @@ class OfferItem(BaseModel):
     link: str
     condition: Optional[str] = None
     reason: Optional[str] = None
+    image: Optional[str] = None
 
 
 class RankResult(BaseModel):
@@ -35,3 +36,5 @@ class RankResponse(BaseModel):
     steps: int
     errors: List[str] = []
     result: RankResult
+    needs_more_info: bool = False
+    follow_up_question: Optional[str] = None

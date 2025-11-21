@@ -1,21 +1,47 @@
 # app/agent/normalizers.py
 from __future__ import annotations
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
+
+MODEL_TOKEN_MAP: List[Tuple[str, List[str]]] = [
+    ("iPhone 15 Pro Max", ["15 pro max", "15promax", "promax", "برو ماكس", "ماكس"]),
+    ("iPhone 15 Pro", ["15 pro", "15pro", "برو"]),
+    ("iPhone 15 Plus", ["15 plus", "15+", "بلاس", "بلس"]),
+    ("iPhone 15", ["iphone 15", "ايفون 15", "آيفون 15"]),
+    ("iPhone 14 Pro Max", ["14 pro max", "14promax"]),
+    ("iPhone 14 Pro", ["14 pro"]),
+    ("iPhone 14 Plus", ["14 plus"]),
+    ("iPhone 14", ["iphone 14", "ايفون 14", "آيفون 14"]),
+]
+
+STORAGE_TOKEN_MAP: List[Tuple[str, List[str]]] = [
+    ("1TB", ["1tb", "١ تيرابايت", "1024"]),
+    ("512GB", ["512", "٥١٢"]),
+    ("256GB", ["256", "٢٥٦"]),
+    ("128GB", ["128", "١٢٨"]),
+]
+
+
+def infer_model_from_text(txt: str) -> Optional[str]:
+    for label, tokens in MODEL_TOKEN_MAP:
+        if any(token in txt for token in tokens):
+            return label
+    return None
+
+
+def infer_storage_from_text(txt: str) -> Optional[str]:
+    for label, tokens in STORAGE_TOKEN_MAP:
+        if any(token in txt for token in tokens):
+            return label
+    return None
 
 
 def spec_normalizer(name: str, retailer: str, condition: str) -> Dict[str, Any]:
     """Normalize model, storage, and condition from raw product text."""
     txt = f"{name} {retailer} {condition}".lower()
 
-    if ("pro max" in txt) or ("promax" in txt) or (" ماكس" in txt):
-        model = "iPhone 15 Pro Max"
-    elif ("15 pro" in txt) or (" 15 برو" in txt):
-        model = "iPhone 15 Pro"
-    else:
-        model = None
-
-    storage = "256GB" if ("256" in txt or "٢٥٦" in txt) else None
+    model = infer_model_from_text(txt)
+    storage = infer_storage_from_text(txt)
 
     cond_raw = (condition or "").strip()
     cl = cond_raw.lower()

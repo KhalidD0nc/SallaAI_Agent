@@ -8,8 +8,10 @@ from openai import OpenAI
 # Load environment variables from .env at project root
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-SEARCHAPI_KEY = os.getenv("SEARCHAPI_KEY")
+# Strip whitespace from keys to avoid issues with .env file formatting
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip() if os.getenv("OPENAI_API_KEY") else None
+# SearchAPI.io key
+SEARCHAPI_KEY = os.getenv("SEARCHAPI_KEY", "").strip() if os.getenv("SEARCHAPI_KEY") else None
 
 
 def get_openai_client() -> OpenAI:

@@ -84,6 +84,7 @@ async def rank_products(payload: RankRequest) -> RankResponse:
             link=str(it.get("link", "")),
             condition=it.get("condition"),
             reason=it.get("reason"),
+            image=it.get("image"),
         )
         items.append(item)
 
@@ -95,5 +96,7 @@ async def rank_products(payload: RankRequest) -> RankResponse:
         steps=steps,
         errors=errors,
         result=result,
+        needs_more_info=bool(final.get("needs_more_info")),
+        follow_up_question=final.get("follow_up_question"),
     )
     return response
