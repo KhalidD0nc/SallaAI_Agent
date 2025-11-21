@@ -9,7 +9,6 @@ venv/
 # Environment / secrets
 .env
 .env.*
-backend/.env
 
 # Logs
 *.log

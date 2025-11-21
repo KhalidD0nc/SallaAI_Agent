@@ -4,8 +4,8 @@ from __future__ import annotations
 import json
 from typing import List, Dict, Any
 
-from app.core.config import client
-from app.core.constants import TRUSTED_KSA
+from Core.config import client
+from Core.constants import TRUSTED_KSA
 
 
 def is_pro_max_query(q: str) -> bool:

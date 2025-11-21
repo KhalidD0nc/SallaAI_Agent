@@ -1,12 +1,12 @@
-# app/api/v1/routes_rank.py
+# API/routes_rank.py
 from __future__ import annotations
 
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
 
-from app.agent import build_app, AgentState
-from app.core.config import OPENAI_API_KEY
+from Agent import build_app, AgentState
+from Core.config import OPENAI_API_KEY
 from .schemas import RankRequest, RankResponse, RankResult, OfferItem
 
 router = APIRouter(prefix="/rank", tags=["rank"])

@@ -8,10 +8,10 @@ from langgraph.graph import StateGraph, START, END
 # لا نستخدم MemorySaver عشان ما نحتاج thread_id
 # from langgraph.checkpoint.memory import MemorySaver
 
-from app.core.constants import TRUSTED_KSA
-from app.agent.tools import shopping_search, product_page_fetch
-from app.agent.normalizers import spec_normalizer, price_normalizer
-from app.agent.ranking import is_pro_max_query, need_256, llm_rank_offers
+from Core.constants import TRUSTED_KSA
+from Agent.tools import shopping_search, product_page_fetch
+from Agent.normalizers import spec_normalizer, price_normalizer
+from Agent.ranking import is_pro_max_query, need_256, llm_rank_offers
 
 
 class AgentState(TypedDict, total=False):

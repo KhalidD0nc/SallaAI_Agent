@@ -50,15 +50,17 @@ This backend is designed to be consumed later by a web or mobile frontend, or by
 ## Project Structure
 
 ```text
-backend/
-  app/
-    main.py               # FastAPI app entrypoint
-    models.py             # Pydantic models (RankRequest, RankResponse, etc.)
-    agent/
-      graph.py            # LangGraph agent (plan/act/observe/finish)
-    api/
-      v1/
-        routes_rank.py    # /rank endpoint router
-  .env                    # Environment variables (not committed)
-  requirements.txt        # Python dependencies
-  README.md               # This file
+.
+  main.py               # FastAPI app entrypoint
+  models.py             # Pydantic models (RankRequest, RankResponse, etc.)
+  Agent/
+    graph.py            # LangGraph agent (plan/act/observe/finish)
+  API/
+    routes_rank.py      # /rank endpoint router
+    schemas.py          # Request/response models
+  Core/
+    config.py           # Secrets + client helpers
+    constants.py        # Trusted retailers, default limits, etc.
+  Docs/
+  .env                  # Environment variables (not committed)
+  requirements.txt      # Python dependencies

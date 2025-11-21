@@ -6,8 +6,8 @@ from typing import List, Dict, Any, Optional
 
 import requests
 
-from app.core.config import SEARCHAPI_KEY
-from app.core.constants import TRUSTED_KSA  # imported for completeness (if needed)
+from Core.config import SEARCHAPI_KEY
+from Core.constants import TRUSTED_KSA  # imported for completeness (if needed)
 
 
 def normalize_retailer(name: Optional[str]) -> str:

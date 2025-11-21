@@ -1,4 +1,4 @@
-# app/api/v1/schemas.py
+# API/schemas.py
 from __future__ import annotations
 
 from typing import List, Optional

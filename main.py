@@ -6,8 +6,8 @@ from typing import Any, Dict
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.config import OPENAI_API_KEY
-from app.api.v1.routes_rank import router as rank_router
+from Core.config import OPENAI_API_KEY
+from API.routes_rank import router as rank_router
 
 
 app = FastAPI(
