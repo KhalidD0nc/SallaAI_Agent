@@ -47,23 +47,4 @@ This Agent is designed to be consumed later by a web or mobile frontend, or by a
 
 ---
 
-## Project Structure
 
-.
-  main.py               # FastAPI app entrypoint
-  models.py             # Pydantic models
-  Agent/
-    graph.py            # LangGraph agent (plan/act/observe/finish)
-    intent.py           # Intent analysis logic
-    ranking.py          # LLM ranking logic
-    tools.py            # Search & fetch tools
-    normalizers.py      # Data normalization helpers
-  API/
-    routes_rank.py      # /rank endpoint router
-    schemas.py          # Request/response models
-  Core/
-    config.py           # Secrets + client helpers
-    constants.py        # Trusted retailers, default limits, etc.
-  Docs/                 # Documentation (Logic, Contributing, etc.)
-  .env                  # Environment variables (not committed)
-  requirements.txt      # Python dependencies
