@@ -1,4 +1,4 @@
-# KSA Shopping Agent – Backend (FastAPI + LangGraph)
+#  Shopping Agent – Backend (FastAPI + LangGraph)
 
 This backend provides an AI-powered shopping agent optimized for the Saudi market.  
 It uses LangGraph, OpenAI, and SearchAPI.io (Google Shopping) to search for products, normalize specs, and recommend the best offers according to a clear policy.
